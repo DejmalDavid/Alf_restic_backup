@@ -24,6 +24,16 @@ export PSQL_PASSWORD=alfresco
 export RESTIC_REPOSITORY="${MOUNT_TO}"/TEST
 export RESTIC_PASSWORD_FILE=/root/restic-password
 
+export LOGS_DIR="${ALFFRESCO}"/backup/logs
+
+#Logger
+mkdir -p ${LOGS_DIR}
+
+export log_filename="${LOGS_DIR}/backup_$(date +\%Y\%m\%d).log"
+export log_err_filename="${LOGS_DIR}/backup_ERR_$(date +\%Y\%m\%d).log"
+
+exec > ${log_filename}
+exec 2> ${log_err_filename}
 
 # Mount destionation 
 # if connecton RO (by hands maybe) remount RW, other RW , if error then end
@@ -32,7 +42,7 @@ if findmnt --mountpoint "${MOUNT_TO}" -O ro > /dev/null
       mount -o remount,rw "${MOUNT_TO}" || exit 4
   elif findmnt --mountpoint "${MOUNT_TO}" -O rw > /dev/null
     then
-      echo "Prover - "${MOUNT_TO}" already RW; continue"
+      echo "TESTing - "${MOUNT_TO}" already RW; continue"
   elif ! findmnt --mountpoint "${MOUNT_TO}"  > /dev/null
     then
       mount -o rw "${MOUNT_TO}" || exit 4
@@ -54,7 +64,7 @@ echo "MOUNT - OK"
 restic -r "${RESTIC_REPOSITORY}" check --read-data   
 retVal=$?
 if [ $retVal -ne 0 ]; then
-    echo "INTEGRITY ERROR!"
+    echo "INTEGRITY ERROR!" >&2
 	exit retVal
 fi
 
@@ -63,7 +73,7 @@ docker-compose -f "${ALFFRESCO}"/docker-compose.yml exec postgres pg_dump --user
 retVal=$?
 
 if [ $retVal -ne 0 ]; then
-    echo "DUMP DATABASE ERROR!"
+    echo "DUMP DATABASE ERROR!" >&2
 	exit retVal
 fi
 
@@ -77,7 +87,7 @@ retVal=$?
 rm "${PSQL_DUMP}"
 
 if [ $retVal -ne 0 ]; then
-    echo "RESTIC BACKUP ERROR!"
+    echo "RESTIC BACKUP ERROR!" >&2
 	exit $retVal
 fi
 
@@ -87,7 +97,7 @@ echo "BACKUP - OK"
 restic forget --keep-daily 30 --keep-monthly 3 --prune
 retVal=$?
 if [ $retVal -ne 0 ]; then
-    echo "RESTIC FORGET ERROR!"
+    echo "RESTIC FORGET ERROR!" >&2
 	exit $retVal
 fi
 
@@ -97,7 +107,7 @@ echo "RESTIC forget - OK"
 restic -r "${RESTIC_REPOSITORY}" check --read-data --cleanup-cache   
 retVal=$?
 if [ $retVal -ne 0 ]; then
-    echo "INTEGRITY ERROR AFTER BACKUP!"
+    echo "INTEGRITY ERROR AFTER BACKUP!" >&2
 	exit $retVal
 fi
 
@@ -105,6 +115,11 @@ echo "RESTIC check - OK"
 
 #umount
 umount "${MOUNT_TO}"
+
+#delete empty ERR log
+if [ ! -s "$log_err_filename" ]; then
+    rm "$log_err_filename"
+fi
 
 #happy end
 echo "ALL - OK"

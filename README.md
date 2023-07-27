@@ -28,7 +28,6 @@ Install and running script need root permissions...
 - add Restore step-by-step
 - set run under other user than root
 - add support for sftp or other file storage
-- add logger
 - and much more...
 ---
 
